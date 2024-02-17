@@ -87,7 +87,7 @@ def safe_get(obj, key, default="-"):
 
 @multitasking.task
 def get_province(kode=0):
-    req_parallel(wilayah(kode), lambda item: loop_province(data))
+    req_parallel(wilayah(kode), lambda item: loop_province(item))
     
 def loop_province(data):
     for prov in data:
