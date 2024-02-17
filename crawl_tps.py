@@ -135,7 +135,7 @@ def process_suara(tps, suara):
     kode_tps = tps.get("kode")
     nama_tps = tps.get("nama")
     administrasi = safe_get(suara, 'administrasi', {})
-    img1, img2, img3 = tuple(safe_get(suara, 'images', ('','','')))
+    img1, img2, img3 = tuple(safe_get(suara, 'images', ('-','-','-')))
     chart = suara.get('chart', {})
     suara1 = safe_get(chart, '100025', 0)
     suara2 = safe_get(chart, "100026", 0)
