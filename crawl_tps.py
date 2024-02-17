@@ -63,7 +63,7 @@ def create_file():
     try:
         os.makedirs(OUTPUT_LOCATION)
         with open(dataset_path, 'a') as f:
-            f.write("tps,paslon01,paslon02,paslon03,suara_sah,suara_tidak_sah,total_suara_paslon,img1,img2,img3\n")
+            f.write("tps,paslon01,paslon02,paslon03,suara_sah,suara_tidak_sah,total_suara,total_suara_paslon,img1,img2,img3\n")
     except:
         print("file %s exists" % dataset_path)
 
