@@ -22,7 +22,12 @@ OUTPUT_LOCATION = "dataset"
 FILE_NAME = "suara-tps.csv"
 dataset_path = os.path.join(OUTPUT_LOCATION, FILE_NAME)
 BASE_URL = "https://sirekap-obj-data.kpu.go.id"
+TPS_WEB_URL = 'https://pemilu2024.kpu.go.id/pilpres/hitung-suara';
 PPWP = f'{BASE_URL}/pemilu/ppwp.json'
+WILAYAH_PARTITION = (2,4,6,10,13)
+PASLON01_ID = '100025'
+PASLON02_ID = '100026'
+PASLON03_ID = '100027'
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:122.0) Gecko/20100101 Firefox/122.0',
@@ -48,13 +53,20 @@ def wilayah(*kode):
 def hhcw(*kode):
     return base_request(f"{BASE_URL}/pemilu/hhcw/ppwp", *kode)
 
-@multitasking.task
+def tps_webpage(tps):
+    partitioned = '/'.join(get_tps_url_partition(tps))
+    return f"{TPS_WEB_URL}/{partitioned}"
+
+# @multitasking.task
 def req_parallel(url, fn):
     res = requests.get(url, headers=HEADERS).json()
     fn(res)
     
 def req(url):
     return requests.get(url, headers=HEADERS).json()
+
+def get_tps_url_partition(tps):
+    return [str(tps)[:part] for part in WILAYAH_PARTITION]
 
 # In[12]:
 
@@ -63,12 +75,11 @@ def create_file():
     try:
         os.makedirs(OUTPUT_LOCATION)
         with open(dataset_path, 'a') as f:
-            f.write("tps,paslon01,paslon02,paslon03,suara_sah,suara_tidak_sah,total_suara,total_suara_paslon,img1,img2,img3\n")
+            f.write("tps,paslon01,paslon02,paslon03,total_suara_paslon,suara_sah,suara_tidak_sah,total_suara,img1,img2,img3\n")
     except:
         print("file %s exists" % dataset_path)
 
 def write(*data):
-    print(f"writing: {data[:-3]}")
     with open(dataset_path, 'a') as f:
         f.write(f"{','.join(map(str, data))}\n")
 
@@ -77,7 +88,8 @@ def write(*data):
 
 def safe_get(obj, key, default="-"):
     try:
-        return obj.get(key, default)
+        #anticiapte None returned
+        return obj.get(key, default) or default 
     except:
         return default;
 
@@ -85,15 +97,16 @@ def safe_get(obj, key, default="-"):
 # In[13]:
 
 
-@multitasking.task
+# @multitasking.task
 def get_province(kode=0):
     req_parallel(wilayah(kode), lambda item: loop_province(item))
     
 def loop_province(data):
     for prov in data:
+        print("Mengambil data suara pada TPS Provinsi %s" % prov.get('nama'))
         get_kabupaten(prov.get("kode"))
 
-@multitasking.task
+# @multitasking.task
 def get_kabupaten(prov):
     req_parallel(wilayah(prov), lambda item: loop_kabupaten(prov, item))
     
@@ -101,7 +114,7 @@ def loop_kabupaten(prov, data):
     for kab in data:
         get_kecamatan(prov, kab.get("kode"))
 
-@multitasking.task
+# @multitasking.task
 def get_kecamatan(prov, kab):
     req_parallel(wilayah(prov, kab), lambda item: loop_kecamatan(prov, kab, item))
     
@@ -109,7 +122,7 @@ def loop_kecamatan(prov, kab, data):
     for kec in data:
         get_lurah(prov, kab, kec.get("kode"))
 
-@multitasking.task
+# @multitasking.task
 def get_lurah(prov, kab, kec):
     req_parallel(wilayah(prov, kab, kec), lambda item: loop_lurah(prov, kab, kec, item))
 
@@ -118,7 +131,7 @@ def loop_lurah(prov, kab, kec, data):
         get_tps(prov, kab, kec, lurah.get("kode"))
     
 
-@multitasking.task
+# @multitasking.task
 def get_tps(prov, kab, kec, lurah):
     req_parallel(wilayah(prov, kab, kec, lurah), lambda item: loop_tps(prov, kab, kec, lurah, item))
     
@@ -133,23 +146,25 @@ def suara_tps(prov, kab, kec, lurah, tps):
     
 def process_suara(tps, suara):
     kode_tps = tps.get("kode")
-    nama_tps = tps.get("nama")
     administrasi = safe_get(suara, 'administrasi', {})
     img1, img2, img3 = tuple(safe_get(suara, 'images', ('-','-','-')))
     chart = suara.get('chart', {})
-    suara1 = safe_get(chart, '100025', 0)
-    suara2 = safe_get(chart, "100026", 0)
-    suara3 = safe_get(chart, "100027", 0)
+    suara1 = safe_get(chart, PASLON01_ID, 0)
+    suara2 = safe_get(chart, PASLON02_ID, 0)
+    suara3 = safe_get(chart, PASLON03_ID, 0)
     suara_sah = safe_get(administrasi, "suara_sah", 0)
     suara_tidak_sah = safe_get(administrasi, "suara_tidak_sah", 0)
     total_suara = safe_get(administrasi, 'suara_total', 0)
     total_suara_paslon = int(suara1) + int(suara2) + int(suara3)
-    write(kode_tps,suara1,suara2,suara3,suara_sah,suara_tidak_sah,total_suara,total_suara_paslon,img1,img2,img3)
+    write(kode_tps,suara1,suara2,suara3,total_suara_paslon,suara_sah,suara_tidak_sah,total_suara,img1,img2,img3)
 
 
 # In[24]:
 
 if __name__ == "__main__":
+    multitasking.set_max_threads(multitasking.config["CPU_CORES"] * 5)
+    multitasking.set_engine("process") # "process" or "thread"
+
     create_file()
     get_province()
 
