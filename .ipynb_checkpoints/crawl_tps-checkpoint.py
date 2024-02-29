@@ -10,6 +10,7 @@ from celery import Celery
 
 app = Celery('multi-task-request')
 
+
 # In[ ]:
 
 
